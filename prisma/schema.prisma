@@ -1,0 +1,113 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-1.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String     @id @default(uuid())
+  name              String
+  email             String     @unique
+  password          String
+  hourlyRate        Decimal?
+  role              UserRole   @default(USER)
+  status            UserStatus @default(ACTIVE)
+  passwordChangedAt DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  session           Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  device    String
+  browser   String
+  city      String
+  country   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("sessions")
+}
+
+model Event_Registration {
+  id                 String             @id @default(uuid())
+  teamName           String
+  teamId             String
+  division           Division
+  sessionId          String
+  player1Name        String
+  player2Name        String
+  player1Email       String
+  player2Email       String
+  player1Phone       String?
+  player2Phone       String?
+  paymentEmail       String
+  paymentStatus      PaymentStatus      @default(UNPAID)
+  registrationStatus RegistrationStatus @default(PENDING)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  payment            Payment?
+
+  @@map("event_registrations")
+}
+
+model Payment {
+  id                String             @id @default(uuid())
+  amount            Decimal?
+  name              String
+  email             String
+  phone             String?
+  addressLine1      String?
+  addressLine2      String?
+  city              String?
+  state             String?
+  zip               String?
+  memo              String?
+  paymentMethod     PaymentMethod
+  paymentStatus     PaymentStatus      @default(UNPAID)
+  eventId           String             @unique
+  eventRegistration Event_Registration @relation(fields: [eventId], references: [id])
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum Division {
+  BEGINNER
+  INTERMEDIATE
+  OPEN
+}
+
+enum PaymentStatus {
+  PAID
+  UNPAID
+}
+
+enum RegistrationStatus {
+  COMPLETED
+  PENDING
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CARD
+  ZELLE
+}

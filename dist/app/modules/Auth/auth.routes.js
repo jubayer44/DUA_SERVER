@@ -1,0 +1,23 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AuthRoutes = void 0;
+const express_1 = __importDefault(require("express"));
+const auth_controllers_1 = require("./auth.controllers");
+const validationRequest_1 = __importDefault(require("../../middlewares/validationRequest"));
+const auth_validations_1 = require("./auth.validations");
+const auth_1 = __importDefault(require("../../middlewares/auth"));
+const client_1 = require("@prisma/client");
+const router = express_1.default.Router();
+router.post("/login", (0, validationRequest_1.default)(auth_validations_1.AuthValidationSchemas.LoginUser), auth_controllers_1.AuthControllers.loginUser);
+router.get("/my-sessions", (0, auth_1.default)(client_1.UserRole.USER, client_1.UserRole.ADMIN), auth_controllers_1.AuthControllers.getMyLoggedInSession);
+router.post("/logout", auth_controllers_1.AuthControllers.logoutUser);
+router.post("/refresh-token", auth_controllers_1.AuthControllers.refreshToken);
+router.post("/change-password", (0, auth_1.default)(client_1.UserRole.USER, client_1.UserRole.ADMIN), auth_controllers_1.AuthControllers.changePassword);
+router.post("/forgot-password", auth_controllers_1.AuthControllers.forgotPassword);
+router.post("/reset-password", auth_controllers_1.AuthControllers.resetPassword);
+router.delete("/delete-session", (0, auth_1.default)(client_1.UserRole.USER, client_1.UserRole.ADMIN), auth_controllers_1.AuthControllers.removeMySession);
+router.delete("/delete-session/:id", (0, auth_1.default)(client_1.UserRole.USER, client_1.UserRole.ADMIN), auth_controllers_1.AuthControllers.removeOtherSessionFromDb);
+exports.AuthRoutes = router;
