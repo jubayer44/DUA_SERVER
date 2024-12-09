@@ -9,9 +9,21 @@ import {
   isEventExists,
   isEventOverlapped,
 } from "./eventRegistration.utils";
-import { PaymentStatus, RegistrationStatus } from "@prisma/client";
+import {
+  PaymentMethod,
+  PaymentStatus,
+  Prisma,
+  RegistrationStatus,
+} from "@prisma/client";
 import Stripe from "stripe";
 import config from "../../../config";
+import { generateAndSavePdf } from "./pdfServices";
+import sendEmail from "../Auth/sendEmail";
+import { paymentSuccessTemplateAdmin } from "../../htmlTemplate/admin.paymentSuccessHtml";
+
+const MAX_RETRIES = 3; // Max retries for testing
+const TIMEOUT = 40000; // Timeout for the transaction (40 seconds)
+const MAX_WAIT = 15000; // Max wait for lock acquisition (15 seconds)
 
 const stripe = new Stripe(
   "sk_test_51M65RLSIrCWJQylGZg0jIyfN7xrow2tH1dYroy8mnkxtzPZGQHtdDWU60WRM45WvmK418BHtdtQ06C8FSF6P5xcn00UYMw8vO8",
@@ -20,130 +32,321 @@ const stripe = new Stripe(
   }
 );
 
-const createEventIntoDb = async (payload: any) => {
-  const {
-    teamName,
-    division,
-    player1Name,
-    player2Name,
-    sessionId,
-    player1Phone,
-    player2Phone,
-    name,
-    email,
-    phone,
-    addressLine1,
-    addressLine2,
-    city,
-    state,
-    zip,
-    memo,
-    paymentType,
-  } = payload;
-  const player1Email = payload.player1Email || payload.player1email;
-  const player2Email = payload.player1Email || payload.player2email;
+// const createEventIntoDb = async (payload: any) => {
+//   const {
+//     teamName,
+//     division,
+//     player1Name,
+//     player2Name,
+//     sessionId,
+//     player1Phone,
+//     player2Phone,
+//     name,
+//     email,
+//     phone,
+//     addressLine1,
+//     addressLine2,
+//     city,
+//     state,
+//     zip,
+//     memo,
+//     paymentType,
+//   } = payload;
+//   const player1Email = payload.player1Email || payload.player1email;
+//   const player2Email = payload.player1Email || payload.player2email;
 
-  let paymentMethod: any;
+//   let paymentMethod: any;
 
-  const amount = getEventAmount(division);
+//   const amount = getEventAmount(division);
 
-  if (amount === 0) {
-    throw new AppError(httpStatus.BAD_REQUEST, "Invalid Amount");
-  }
+//   if (amount === 0) {
+//     throw new AppError(httpStatus.BAD_REQUEST, "Invalid Amount");
+//   }
 
-  if (!paymentType) {
-    throw new AppError(httpStatus.BAD_REQUEST, "Payment type is required");
-  }
+//   if (!paymentType) {
+//     throw new AppError(httpStatus.BAD_REQUEST, "Payment type is required");
+//   }
 
-  const pType = Number(paymentType);
+//   const pType = Number(paymentType);
 
-  await isEventAlreadyExists(division, player1Email, player2Email);
+//   await isEventAlreadyExists(division, player1Email, player2Email);
 
-  const teamId = await generateTeamId();
+//   const teamId = await generateTeamId();
 
-  let result;
+//   let result: any;
 
-  if (pType === eventPaymentType.card) {
-    paymentMethod = "CARD";
+//   if (pType === eventPaymentType.card) {
+//     paymentMethod = "CARD";
 
-    result = await prisma.$transaction(async (tx) => {
-      const event = await tx.event_Registration.create({
-        data: {
-          teamName,
-          division,
-          teamId,
-          sessionId,
-          player1Name: player1Name,
-          player2Name: player2Name,
-          player1Email: player1Email,
-          player2Email: player2Email,
-          player1Phone: player1Phone || null,
-          player2Phone: player2Phone || null,
-          paymentEmail: email,
-          paymentStatus: PaymentStatus.PAID,
-          registrationStatus: RegistrationStatus.COMPLETED,
-        },
-      });
+//     result = await prisma.$transaction(
+//       async (tx) => {
+//         const event = await tx.event_Registration.create({
+//           data: {
+//             teamName,
+//             division,
+//             teamId,
+//             sessionId,
+//             player1Name: player1Name,
+//             player2Name: player2Name,
+//             player1Email: player1Email,
+//             player2Email: player2Email,
+//             player1Phone: player1Phone || null,
+//             player2Phone: player2Phone || null,
+//             paymentEmail: email,
+//             paymentStatus: PaymentStatus.PAID,
+//             registrationStatus: RegistrationStatus.COMPLETED,
+//           },
+//         });
 
-      const payment = await tx.payment.create({
-        data: {
-          name,
-          email,
-          phone: phone || null,
-          addressLine1: addressLine1 || null,
-          addressLine2: addressLine2 || null,
-          city: city || null,
-          state: state || null,
-          zip: zip || null,
-          eventId: event.id,
-          paymentStatus: PaymentStatus.PAID,
-          amount,
-          paymentMethod,
-          memo,
-        },
-      });
+//         const payment = await tx.payment.create({
+//           data: {
+//             name,
+//             email,
+//             phone: phone || null,
+//             addressLine1: addressLine1 || null,
+//             addressLine2: addressLine2 || null,
+//             city: city || null,
+//             state: state || null,
+//             zip: zip || null,
+//             eventId: event.id,
+//             paymentStatus: PaymentStatus.PAID,
+//             amount,
+//             paymentMethod,
+//             memo,
+//           },
+//         });
 
-      return { event, payment };
-    });
-  } else if (pType === eventPaymentType.zelle) {
-    paymentMethod = "ZELLE";
+//         return { event, payment };
+//       },
+//       {
+//         maxWait: 5000,
+//         timeout: 10000,
+//         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+//       }
+//     );
+//   }
 
-    result = await prisma.$transaction(async (tx) => {
-      const event = await tx.event_Registration.create({
-        data: {
-          teamName,
-          division,
-          teamId,
-          sessionId,
-          player1Name,
-          player2Name,
-          player1Email,
-          player2Email,
-          player1Phone: player1Phone || null,
-          player2Phone: player2Phone || null,
-          paymentEmail: email,
-        },
-      });
+//   // else if (pType === eventPaymentType.zelle) {
+//   //   paymentMethod = "ZELLE";
 
-      const payment = await tx.payment.create({
-        data: {
-          name,
-          email,
-          eventId: event.id,
-          amount,
-          paymentMethod,
-          memo,
-        },
-      });
+//   //   result = await prisma.$transaction(async (tx) => {
+//   //     const event = await tx.event_Registration.create({
+//   //       data: {
+//   //         teamName,
+//   //         division,
+//   //         teamId,
+//   //         player1Name,
+//   //         player2Name,
+//   //         player1Email,
+//   //         player2Email,
+//   //         player1Phone,
+//   //         player2Phone,
+//   //         paymentEmail: email,
+//   //       },
+//   //     });
 
-      return { event, payment };
-    });
-  } else {
-    throw new AppError(httpStatus.BAD_REQUEST, "Invalid payment type");
-  }
+//   //     const payment = await tx.payment.create({
+//   //       data: {
+//   //         name,
+//   //         email,
+//   //         eventId: event.id,
+//   //         amount,
+//   //         paymentMethod,
+//   //         memo,
+//   //       },
+//   //     });
 
-  return result;
-};
+//   //     const address = `Address: N/A`;
+
+//   //     const today = new Date();
+//   //     const day = String(today.getDate()).padStart(2, "0"); // Ensure day is always two digits
+//   //     const month = String(today.getMonth() + 1).padStart(2, "0"); // Months are 0-based, so we add 1
+//   //     const year = today.getFullYear();
+
+//   //     const date = `${month}/${day}/${year}`;
+
+//   //     const pdf = await generateAndSavePdf(
+//   //       name,
+//   //       email,
+//   //       phone,
+//   //       division,
+//   //       address,
+//   //       teamName,
+//   //       amount.toString(),
+//   //       paymentMethod,
+//   //       teamId,
+//   //       date
+//   //     );
+
+//   //     // send mail to admin
+
+//   //     const paymentDetails = {
+//   //       name,
+//   //       email,
+//   //       amount: amount.toString(),
+//   //       date,
+//   //       teamName,
+//   //       teamId,
+//   //       status: "Pending",
+//   //       paymentMethod,
+//   //     };
+
+//   //     const html = paymentSuccessTemplateAdmin(paymentDetails);
+
+//   //     await sendEmail(
+//   //       config.default_email as string,
+//   //       "New Payment Request with Zelle",
+//   //       html,
+//   //       teamId
+//   //     );
+//   //     return { event, payment, receipt: pdf };
+//   //   },
+//   //   {
+//   //     maxWait: 5000,
+//   //     timeout: 10000,
+//   //     isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+//   //   }
+//   // );
+//   // }
+
+//   // else {
+//   //   throw new AppError(httpStatus.BAD_REQUEST, "Invalid payment type");
+//   // }
+
+//   const MAX_RETRIES = 3; // Max retries for testing
+//   const TIMEOUT = 40000; // Timeout for the transaction (10 seconds)
+//   const MAX_WAIT = 15000; // Max wait for transaction (10 seconds) Max wait for transaction (10 seconds)
+//   let retries = 0;
+
+//   async function createEventAndPayment() {
+//     while (retries < MAX_RETRIES) {
+//       try {
+//         if (pType === eventPaymentType.zelle) {
+//           paymentMethod = "ZELLE";
+
+//           result = await prisma.$transaction(
+//             async (tx) => {
+//               // Simulate a delay (e.g., 15 seconds) to trigger the timeout error
+//               // await new Promise((resolve) => setTimeout(resolve, 6000)); // 15 seconds delay to simulate a timeout
+
+//               const event = await tx.event_Registration.create({
+//                 data: {
+//                   teamName,
+//                   division,
+//                   teamId,
+//                   player1Name,
+//                   player2Name,
+//                   player1Email,
+//                   player2Email,
+//                   player1Phone,
+//                   player2Phone,
+//                   paymentEmail: email,
+//                 },
+//               });
+
+//               const payment = await tx.payment.create({
+//                 data: {
+//                   name,
+//                   email,
+//                   eventId: event.id,
+//                   amount,
+//                   paymentMethod,
+//                   memo,
+//                 },
+//               });
+
+//               const address = `Address: N/A`;
+
+//               const today = new Date();
+//               const day = String(today.getDate()).padStart(2, "0");
+//               const month = String(today.getMonth() + 1).padStart(2, "0");
+//               const year = today.getFullYear();
+
+//               const date = `${month}/${day}/${year}`;
+
+//               const pdf = await generateAndSavePdf(
+//                 name,
+//                 email,
+//                 phone,
+//                 division,
+//                 address,
+//                 teamName,
+//                 amount.toString(),
+//                 paymentMethod,
+//                 teamId,
+//                 date
+//               );
+
+//               // Send email to admin
+//               const paymentDetails = {
+//                 name,
+//                 email,
+//                 amount: amount.toString(),
+//                 date,
+//                 teamName,
+//                 teamId,
+//                 status: "Pending",
+//                 paymentMethod,
+//               };
+
+//               const html = paymentSuccessTemplateAdmin(paymentDetails);
+//               // await sendEmail(
+//               //   config.default_email as string,
+//               //   "New Payment Request with Zelle",
+//               //   html,
+//               //   teamId
+//               // );
+
+//               return { event, payment, receipt: pdf };
+//             },
+//             {
+//               maxWait: MAX_WAIT,
+//               timeout: TIMEOUT,
+//               isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+//             }
+//           );
+
+//           // If the transaction is successful, break the loop
+//           break;
+//         }
+//       } catch (error) {
+//         if (error.code === "P2028" && retries < MAX_RETRIES) {
+//           // Handle timeout (P2028) and retry
+//           console.log(
+//             `Transaction timed out. Retrying... (${retries + 1}/${MAX_RETRIES})`
+//           );
+//           retries++;
+//           continue;
+//         } else {
+//           // Handle other errors or after exceeding retry limit
+//           console.error("Transaction failed:", error);
+//           throw error;
+//         }
+//       }
+//     }
+
+//     if (retries === MAX_RETRIES) {
+//       console.error("Transaction failed after maximum retries");
+//       throw new AppError(
+//         httpStatus.BAD_REQUEST,
+//         "Transaction failed after maximum retries"
+//       );
+//     }
+
+//     return result;
+//   }
+
+//   // Call the function to start the process
+//   createEventAndPayment()
+//     .then((result) => {
+//       console.log("Transaction completed successfully:", result);
+//     })
+//     .catch((error) => {
+//       console.error("Transaction failed:", error);
+//     });
+
+//   return result;
+// };
 
 const getAllEventsFromDb = async () => {
   const result = await prisma.event_Registration.findMany({
@@ -320,6 +523,235 @@ const sessionStatus = async (queryData: any) => {
       message: "something went wrong",
     };
   }
+};
+
+const createEventIntoDb = async (payload: any) => {
+  const {
+    teamName,
+    division,
+    player1Name,
+    player2Name,
+    sessionId,
+    player1Phone,
+    player2Phone,
+    name,
+    email,
+    phone,
+    addressLine1,
+    addressLine2,
+    city,
+    state,
+    zip,
+    memo,
+    paymentType,
+  } = payload;
+
+  const player1Email = payload.player1Email || payload.player1email;
+  const player2Email = payload.player2Email || payload.player2email;
+  const pType = Number(paymentType);
+
+  // Validate amount
+  const amount = getEventAmount(division);
+  if (amount === 0) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Invalid Amount");
+  }
+
+  // Validate payment type
+  if (!paymentType) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Payment type is required");
+  }
+
+  // Check if event already exists
+  await isEventAlreadyExists(division, player1Email, player2Email);
+
+  // Generate team ID
+  const teamId = await generateTeamId();
+
+  let result: any;
+
+  // Function to handle retries for both transaction types
+  const handleTransactionWithRetry = async (
+    transactionType: "card" | "zelle"
+  ) => {
+    let retries = 0;
+
+    while (retries < MAX_RETRIES) {
+      try {
+        if (transactionType === "card") {
+          result = await handleCardPaymentTransaction();
+        } else if (transactionType === "zelle") {
+          result = await handleZellePaymentTransaction();
+        }
+
+        // If transaction is successful, break the loop
+        break;
+      } catch (error: any) {
+        if (error.code === "P2028" && retries < MAX_RETRIES) {
+          // If timeout error occurs, retry the transaction
+          console.log(
+            `Transaction timed out. Retrying... (${retries + 1}/${MAX_RETRIES})`
+          );
+          retries++;
+          continue;
+        } else {
+          // Log and throw error if it's not a timeout or retry limit reached
+          console.error("Transaction failed:", error);
+          throw error;
+        }
+      }
+    }
+
+    if (retries === MAX_RETRIES) {
+      console.error("Transaction failed after maximum retries");
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        "Transaction failed after maximum retries"
+      );
+    }
+
+    return result;
+  };
+
+  // Function to handle Card payment transaction
+  const handleCardPaymentTransaction = async () => {
+    let paymentMethod = PaymentMethod.CARD;
+
+    return await prisma.$transaction(
+      async (tx) => {
+        const event = await tx.event_Registration.create({
+          data: {
+            teamName,
+            division,
+            teamId,
+            sessionId,
+            player1Name,
+            player2Name,
+            player1Email,
+            player2Email,
+            player1Phone: player1Phone || null,
+            player2Phone: player2Phone || null,
+            paymentEmail: email,
+            paymentStatus: PaymentStatus.PAID,
+            registrationStatus: RegistrationStatus.COMPLETED,
+          },
+        });
+
+        const payment = await tx.payment.create({
+          data: {
+            name,
+            email,
+            phone: phone || null,
+            addressLine1: addressLine1 || null,
+            addressLine2: addressLine2 || null,
+            city: city || null,
+            state: state || null,
+            zip: zip || null,
+            eventId: event.id,
+            paymentStatus: PaymentStatus.PAID,
+            amount,
+            paymentMethod,
+            memo,
+          },
+        });
+
+        return { event, payment };
+      },
+      {
+        maxWait: MAX_WAIT,
+        timeout: TIMEOUT,
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      }
+    );
+  };
+
+  // Function to handle Zelle payment transaction
+  const handleZellePaymentTransaction = async () => {
+    let paymentMethod = PaymentMethod.ZELLE;
+
+    return await prisma.$transaction(
+      async (tx) => {
+        const event = await tx.event_Registration.create({
+          data: {
+            teamName,
+            division,
+            teamId,
+            player1Name,
+            player2Name,
+            player1Email,
+            player2Email,
+            player1Phone,
+            player2Phone,
+            paymentEmail: email,
+          },
+        });
+
+        const payment = await tx.payment.create({
+          data: {
+            name,
+            email,
+            eventId: event.id,
+            amount,
+            paymentMethod,
+            memo,
+          },
+        });
+
+        const address = `Address: N/A`;
+
+        const today = new Date();
+        const day = String(today.getDate()).padStart(2, "0");
+        const month = String(today.getMonth() + 1).padStart(2, "0");
+        const year = today.getFullYear();
+        const date = `${month}/${day}/${year}`;
+
+        const pdf = await generateAndSavePdf(
+          name,
+          email,
+          phone,
+          division,
+          address,
+          teamName,
+          amount.toString(),
+          paymentMethod,
+          teamId,
+          date
+        );
+
+        // Send email to admin
+        const paymentDetails = {
+          name,
+          email,
+          amount: amount.toString(),
+          date,
+          teamName,
+          teamId,
+          status: "Pending",
+          paymentMethod,
+        };
+
+        const html = paymentSuccessTemplateAdmin(paymentDetails);
+
+        await sendEmail(
+          config.default_email as string,
+          "New Payment Request with Zelle",
+          html,
+          teamId
+        );
+
+        return { event, payment, receipt: pdf };
+      },
+      {
+        maxWait: MAX_WAIT,
+        timeout: TIMEOUT,
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      }
+    );
+  };
+
+  // Determine payment type and call appropriate transaction handling function
+  return await handleTransactionWithRetry(
+    pType === eventPaymentType.card ? "card" : "zelle"
+  );
 };
 
 export const EventRegistrationServices = {

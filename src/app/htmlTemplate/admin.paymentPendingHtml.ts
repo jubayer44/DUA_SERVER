@@ -10,7 +10,7 @@ export const newPaymentRequestTemplate = (paymentDetails: {
   const year = new Date().getFullYear();
 
   return `
-    <!DOCTYPE html>
+   <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
@@ -108,12 +108,15 @@ export const newPaymentRequestTemplate = (paymentDetails: {
     <body>
         <div class="container">
             <div class="header">
-                <img src="${paymentDetails.companyLogoUrl}" alt="Company Logo" />
+                <img src="https://res.cloudinary.com/dqke2ei62/image/upload/v1733719546/v03suprii1e0chuongyn.png" alt="Company Logo" />
             </div>
   
-            <h1>New Payment Request</h1>
-            <p>Dear Admin,</p>
-            <p>You have received a new payment request. Below are the details of the payment for your review and approval:</p>
+            <h1>Event Registration</h1>
+          <div style="display: flex; justify-content: end; align-items: center; gap: 4px; font-size: 14px">
+            <span>Payment: </span> <span style="padding: 4px 10px; background: green; color: white; font-weight: bold; border-radius: 5px">Success</span>
+          </div>
+            <p style="text-align: left">Dear Admin,</p>
+            <p style="text-align: left">You have received a new payment request. Below are the details of the payment for your review and approval:</p>
   
             <div class="payment-details">
                 <h3>Payment Information</h3>
@@ -129,11 +132,12 @@ export const newPaymentRequestTemplate = (paymentDetails: {
             <a href="${paymentDetails.paymentLink}" class="cta-button">Approve Payment</a>
   
             <footer>
-                &copy; ${year} Dulles United Association. All rights reserved. <br />
+              <span style="color: gray">&copy; ${year} Dulles United Association. All rights reserved.</span> <br />
                 <a href="#">Privacy Policy</a> | <a href="#">Terms & Conditions</a>
             </footer>
         </div>
     </body>
     </html>
+
     `;
 };

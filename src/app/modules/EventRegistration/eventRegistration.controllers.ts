@@ -1,7 +1,17 @@
+import path from "path";
 import catchAsync from "../../../shared/catchAsync";
 import sendResponse from "../../../shared/sendResponse";
 import { EventRegistrationServices } from "./eventRegistration.services";
 import { isEventAlreadyExists } from "./eventRegistration.utils";
+import fs from "fs";
+import { generateAndSavePdf } from "./pdfServices";
+
+// Define the directory where the PDFs will be saved
+const PDF_STORAGE_PATH = path.join(__dirname, "uploads");
+
+if (!fs.existsSync(PDF_STORAGE_PATH)) {
+  fs.mkdirSync(PDF_STORAGE_PATH); // Create the uploads folder if it doesn't exist
+}
 
 const createEvent = catchAsync(async (req, res) => {
   const result = await EventRegistrationServices.createEventIntoDb(req.body);
@@ -102,6 +112,38 @@ const sessionStatus = catchAsync(async (req, res) => {
   });
 });
 
+const generatePdf = catchAsync(async (req, res) => {
+  // // After payment is successful, generate the modified PDF with payment details
+  // const pdfLink = await generateAndSavePdf(
+  //   "Jubayer Ahmed",
+  //   "jubayer02@gmail.com",
+  //   "0183849384378",
+  //   "Beginner",
+  //   "My Address",
+  //   "Badminton Register",
+  //   "$150",
+  //   "Card"
+  // );
+  // sendResponse(res, {
+  //   statusCode: 200,
+  //   success: true,
+  //   message: "PDF generated successfully",
+  //   data: pdfLink,
+  // });
+});
+
+// Serve the generated PDF files to the client
+const servePdfFile = catchAsync(async (req, res) => {
+  const pdfFileName = req.params.pdfFileName;
+  const pdfFilePath = path.join(PDF_STORAGE_PATH, pdfFileName);
+
+  if (fs.existsSync(pdfFilePath)) {
+    res.sendFile(pdfFilePath);
+  } else {
+    res.status(404).json({ message: "PDF file not found" });
+  }
+});
+
 export const EventRegistrationControllers = {
   createEvent,
   getAllEvents,
@@ -110,4 +152,6 @@ export const EventRegistrationControllers = {
   isEventRegistered,
   createCheckoutSession,
   sessionStatus,
+  generatePdf,
+  servePdfFile,
 };

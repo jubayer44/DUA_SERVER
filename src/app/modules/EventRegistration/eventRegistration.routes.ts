@@ -1,6 +1,6 @@
 import express from "express";
-import { EventRegistrationControllers } from "./eventRegistration.controllers";
 import validationRequest from "../../middlewares/validationRequest";
+import { EventRegistrationControllers } from "./eventRegistration.controllers";
 import { EventRegistrationValidationSchemas } from "./eventRegistration.validations";
 const router = express.Router();
 
@@ -35,5 +35,12 @@ router.post(
 );
 
 router.get("/session-status", EventRegistrationControllers.sessionStatus);
+
+router.post("/generate-pdf", EventRegistrationControllers.generatePdf);
+
+router.get(
+  "/serve-pdf/:pdfFileName",
+  EventRegistrationControllers.servePdfFile
+);
 
 export const EventRegistrationRoutes = router;

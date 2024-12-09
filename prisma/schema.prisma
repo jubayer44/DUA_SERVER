@@ -43,7 +43,7 @@ model Event_Registration {
   teamName           String
   teamId             String
   division           Division
-  sessionId          String
+  sessionId          String?
   player1Name        String
   player2Name        String
   player1Email       String

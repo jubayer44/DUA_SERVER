@@ -52,6 +52,7 @@ CREATE TABLE "event_registrations" (
     "teamName" TEXT NOT NULL,
     "teamId" TEXT NOT NULL,
     "division" "Division" NOT NULL,
+    "sessionId" TEXT,
     "player1Name" TEXT NOT NULL,
     "player2Name" TEXT NOT NULL,
     "player1Email" TEXT NOT NULL,

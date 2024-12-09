@@ -1,15 +1,22 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.paymentPendingTemplate = void 0;
-const paymentPendingTemplate = (zelleDetails) => {
-    const year = new Date().getFullYear();
-    return `
-    <!DOCTYPE html>
+export const paymentSuccessTemplateAdmin = (paymentDetails: {
+  name: string;
+  email: string;
+  amount: string;
+  date: string;
+  teamName: string;
+  teamId: string;
+  status: string;
+  paymentMethod: string;
+}) => {
+  const year = new Date().getFullYear();
+
+  return `
+   <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Payment Pending</title>
+        <title>New Payment Request</title>
         <style>
             body {
                 font-family: 'Arial', sans-serif;
@@ -35,11 +42,10 @@ const paymentPendingTemplate = (zelleDetails) => {
                 max-width: 200px;
             }
             h1 {
-                color: #34495e;
-                font-size: 36px;
+                 color: #34495e;
+                font-size: 24px;
                 font-weight: bold;
                 text-transform: uppercase;
-                letter-spacing: 2px;
                 margin-bottom: 20px;
                 line-height: 1.2;
             }
@@ -97,40 +103,94 @@ const paymentPendingTemplate = (zelleDetails) => {
                 color: #3498db;
                 text-decoration: none;
             }
+                table {
+            width: 100%;
+            border: 1px solid #e2e8f0;
+            margin-top: 1rem;
+        }
+
+        th, td {
+            padding: 1rem;
+            text-align: left;
+           background-color: #f7fafc;
+        }
+
+        th {
+            background-color: #f7fafc;
+            color: #4a5568;
+        }
+        .payment-success {
+            display: flex; 
+            justify-content: end; 
+            align-items: center; 
+            gap: 4px; 
+            font-size: 14px
+          }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
-                <img src="${zelleDetails.companyLogoUrl}" alt="Company Logo" />
+                <img src="https://res.cloudinary.com/dqke2ei62/image/upload/v1733719546/v03suprii1e0chuongyn.png" alt="Company Logo" />
             </div>
   
-            <h1>Payment Pending</h1>
-            <p>Dear ${zelleDetails.name},</p>
-            <p>Thank you for your recent payment. We have received your Zelle payment, and it is currently pending verification. Please find the details of your transaction below:</p>
+            <h1>Event Registration</h1>
+          ${
+            paymentDetails.status === "Pending"
+              ? `<div class="payment-success">
+            <span>Payment: </span> <span style="padding: 4px 10px; background: yellow; color: black; font-weight: bold; border-radius: 5px">${paymentDetails.status}</span>
+          </div>`
+              : `<span></span>`
+          }
+          ${
+            paymentDetails.status === "Success"
+              ? `<div class="payment-success">
+            <span>Payment: </span> <span style="padding: 4px 10px; background: green; color: white; font-weight: bold; border-radius: 5px">${paymentDetails.status}</span>
+          </div>`
+              : `<span></span>`
+          }
+          
+            <p style="text-align: left">Dear Admin,</p>
+            <p style="text-align: left">You have received a new payment. Below are the details of the payment.</p>
   
+            
+        <div class="payment-details">
+            <h3 >Team Information</h3>
+            <table class="min-w-full table-auto border-collapse">
+                <thead>
+                    <tr>
+                        <th>Team Name</th>
+                        <th>Team ID</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>${paymentDetails.teamName}</td>
+                        <td>${paymentDetails.teamId}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
             <div class="payment-details">
                 <h3>Payment Information</h3>
-                <p><strong>Name:</strong> ${zelleDetails.name}</p>
-                <p><strong>Email:</strong> ${zelleDetails.email}</p>
-                <p><strong>Amount:</strong> $${zelleDetails.amount}</p>
-                <p><strong>Transaction ID:</strong> ${zelleDetails.transactionId}</p>
-                <p><strong>Date of Payment:</strong> ${zelleDetails.date}</p>
+                <p><strong>Name:</strong> ${paymentDetails.name}</p>
+                <p><strong>Email:</strong> ${paymentDetails.email}</p>
+                <p><strong>Amount:</strong> $${paymentDetails.amount}</p>
+                <p><strong>Payment Method:</strong>${
+                  paymentDetails.paymentMethod
+                }</p>
+                <p><strong>Date of Payment:</strong> ${paymentDetails.date}</p>
             </div>
   
-            <p>Your payment will be reviewed and verified by our admin team. Once it's confirmed, we will send you a confirmation email. Please allow us a short time for this process to complete.</p>
-  
-            <p>We greatly appreciate your prompt payment and your trust in us. If you have any questions or need assistance, don't hesitate to contact us.</p>
-  
-            <a href="#" class="cta-button">Track Payment Status</a>
   
             <footer>
-                &copy; ${year} Dulles United Association. All rights reserved. <br />
+              <span style="color: gray">&copy; ${year} Dulles United Association. All rights reserved.</span> <br />
                 <a href="#">Privacy Policy</a> | <a href="#">Terms & Conditions</a>
             </footer>
         </div>
     </body>
     </html>
-    `;
+
+      `;
 };
-exports.paymentPendingTemplate = paymentPendingTemplate;
