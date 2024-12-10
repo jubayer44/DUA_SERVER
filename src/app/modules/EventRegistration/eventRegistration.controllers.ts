@@ -1,10 +1,18 @@
+import fs from "fs";
 import path from "path";
 import catchAsync from "../../../shared/catchAsync";
 import sendResponse from "../../../shared/sendResponse";
 import { EventRegistrationServices } from "./eventRegistration.services";
 import { isEventAlreadyExists } from "./eventRegistration.utils";
-import fs from "fs";
-import { generateAndSavePdf } from "./pdfServices";
+import pickFunction from "../../../shared/picFunction";
+import { parsePaginationOptions } from "../../../shared/parsePaginationOptions";
+import { paginationOptions } from "../../constant";
+import {
+  eventQueryableField,
+  updateEventData,
+  updatePaymentData,
+} from "./eventRegistration.constant";
+import { Request, Response } from "express";
 
 // Define the directory where the PDFs will be saved
 const PDF_STORAGE_PATH = path.join(__dirname, "uploads");
@@ -25,19 +33,28 @@ const createEvent = catchAsync(async (req, res) => {
 });
 
 const getAllEvents = catchAsync(async (req, res) => {
-  const result = await EventRegistrationServices.getAllEventsFromDb();
+  const filtersField = pickFunction(req?.query, eventQueryableField);
+  const options = parsePaginationOptions(
+    pickFunction(req?.query, paginationOptions)
+  );
+  const result = await EventRegistrationServices.getAllEventsFromDb(
+    filtersField,
+    options
+  );
   sendResponse(res, {
     statusCode: 200,
     success: true,
     message: "All Events retrieved successfully",
-    data: result,
+    meta: result.meta,
+    data: result.data,
   });
 });
 
 const updateEvent = catchAsync(async (req, res) => {
+  const filterData = pickFunction(req?.body, updateEventData);
   const result = await EventRegistrationServices.updateEventIntoDb(
     req.params.id,
-    req.body
+    filterData
   );
   sendResponse(res, {
     statusCode: 200,
@@ -48,15 +65,29 @@ const updateEvent = catchAsync(async (req, res) => {
 });
 
 const updatePayment = catchAsync(async (req, res) => {
+  const filterData = pickFunction(req?.body, updatePaymentData);
   const result = await EventRegistrationServices.updatePaymentIntoDb(
     req.params.id,
-    req.body
+    filterData
   );
 
   sendResponse(res, {
     statusCode: 200,
     success: true,
     message: "Payment updated successfully",
+    data: result,
+  });
+});
+
+const updateZellePaymentStatus = catchAsync(async (req, res) => {
+  const result = await EventRegistrationServices.updateZellePaymentStatus(
+    req.body.paymentStatus,
+    req.params.id
+  );
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: "Payment status updated successfully",
     data: result,
   });
 });
@@ -100,6 +131,13 @@ const sessionStatus = catchAsync(async (req, res) => {
     player2email: req.query.player2Email,
     player1Phone: req.query.player1Phone,
     player2Phone: req.query.player2Phone,
+    eventName: req.query.eventName,
+    ...(req.query?.player1Image === "null"
+      ? {}
+      : { memo: req.query.player1Image }),
+    ...(req.query?.player2Image === "null"
+      ? {}
+      : { memo: req.query.player2Image }),
     ...(req.query?.memo === "null" ? {} : { memo: req.query.memo }),
   };
 
@@ -110,26 +148,6 @@ const sessionStatus = catchAsync(async (req, res) => {
     message: "Session status retrieved successfully",
     data: result,
   });
-});
-
-const generatePdf = catchAsync(async (req, res) => {
-  // // After payment is successful, generate the modified PDF with payment details
-  // const pdfLink = await generateAndSavePdf(
-  //   "Jubayer Ahmed",
-  //   "jubayer02@gmail.com",
-  //   "0183849384378",
-  //   "Beginner",
-  //   "My Address",
-  //   "Badminton Register",
-  //   "$150",
-  //   "Card"
-  // );
-  // sendResponse(res, {
-  //   statusCode: 200,
-  //   success: true,
-  //   message: "PDF generated successfully",
-  //   data: pdfLink,
-  // });
 });
 
 // Serve the generated PDF files to the client
@@ -144,6 +162,21 @@ const servePdfFile = catchAsync(async (req, res) => {
   }
 });
 
+const deleteEvent = catchAsync(
+  async (req: Request & { user?: any }, res: Response) => {
+    const result = await EventRegistrationServices.deleteEventFromDb(
+      req.params.id,
+      req?.user
+    );
+    sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: "Event deleted successfully",
+      data: result,
+    });
+  }
+);
+
 export const EventRegistrationControllers = {
   createEvent,
   getAllEvents,
@@ -152,6 +185,7 @@ export const EventRegistrationControllers = {
   isEventRegistered,
   createCheckoutSession,
   sessionStatus,
-  generatePdf,
   servePdfFile,
+  updateZellePaymentStatus,
+  deleteEvent,
 };

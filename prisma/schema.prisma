@@ -43,14 +43,17 @@ model Event_Registration {
   teamName           String
   teamId             String
   division           Division
-  sessionId          String?
+  sessionId          String?            @unique
   player1Name        String
   player2Name        String
   player1Email       String
   player2Email       String
   player1Phone       String?
   player2Phone       String?
+  player1Image       String?
+  player2Image       String?
   paymentEmail       String
+  eventName          String
   paymentStatus      PaymentStatus      @default(UNPAID)
   registrationStatus RegistrationStatus @default(PENDING)
   createdAt          DateTime           @default(now())
@@ -61,23 +64,24 @@ model Event_Registration {
 }
 
 model Payment {
-  id                String             @id @default(uuid())
-  amount            Decimal?
-  name              String
-  email             String
-  phone             String?
-  addressLine1      String?
-  addressLine2      String?
-  city              String?
-  state             String?
-  zip               String?
-  memo              String?
-  paymentMethod     PaymentMethod
-  paymentStatus     PaymentStatus      @default(UNPAID)
-  eventId           String             @unique
-  eventRegistration Event_Registration @relation(fields: [eventId], references: [id])
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id                   String             @id @default(uuid())
+  amount               Decimal?
+  name                 String
+  email                String
+  phone                String?
+  addressLine1         String?
+  addressLine2         String?
+  city                 String?
+  state                String?
+  zip                  String?
+  memo                 String?
+  paymentMethod        PaymentMethod
+  paymentStatus        PaymentStatus      @default(UNPAID)
+  sendConfirmationMail Boolean            @default(false)
+  eventId              String             @unique
+  eventRegistration    Event_Registration @relation(fields: [eventId], references: [id])
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 }
 
 enum UserRole {

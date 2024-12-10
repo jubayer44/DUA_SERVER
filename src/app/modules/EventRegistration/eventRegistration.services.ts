@@ -1,6 +1,9 @@
 import httpStatus from "http-status";
 import AppError from "../../errors/AppError";
-import { eventPaymentType } from "./eventRegistration.constant";
+import {
+  eventPaymentType,
+  eventSearchableField,
+} from "./eventRegistration.constant";
 import prisma from "../../../shared/prisma";
 import {
   generateTeamId,
@@ -20,6 +23,13 @@ import config from "../../../config";
 import { generateAndSavePdf } from "./pdfServices";
 import sendEmail from "../Auth/sendEmail";
 import { paymentSuccessTemplateAdmin } from "../../htmlTemplate/admin.paymentSuccessHtml";
+import { paymentSuccessTemplate } from "../../htmlTemplate/user.paymentSuccessHtml";
+import sendEmailWithAttach from "../Auth/sendEmailWithAttach";
+import { TPagination } from "../../interfaces/common";
+import { TEventParams } from "./eventRegistration.interface";
+import { paginationHelpers } from "../../../helpers/paginationHelpers";
+import { JwtPayload } from "jsonwebtoken";
+import { isUserExists } from "../User/user.utils";
 
 const MAX_RETRIES = 3; // Max retries for testing
 const TIMEOUT = 40000; // Timeout for the transaction (40 seconds)
@@ -32,340 +42,92 @@ const stripe = new Stripe(
   }
 );
 
-// const createEventIntoDb = async (payload: any) => {
-//   const {
-//     teamName,
-//     division,
-//     player1Name,
-//     player2Name,
-//     sessionId,
-//     player1Phone,
-//     player2Phone,
-//     name,
-//     email,
-//     phone,
-//     addressLine1,
-//     addressLine2,
-//     city,
-//     state,
-//     zip,
-//     memo,
-//     paymentType,
-//   } = payload;
-//   const player1Email = payload.player1Email || payload.player1email;
-//   const player2Email = payload.player1Email || payload.player2email;
+const today = new Date();
+const day = String(today.getDate()).padStart(2, "0");
+const month = String(today.getMonth() + 1).padStart(2, "0");
+const year = today.getFullYear();
+const date = `${month}/${day}/${year}`;
 
-//   let paymentMethod: any;
+const getAllEventsFromDb = async (
+  params: TEventParams,
+  options: TPagination
+) => {
+  const { page, limit, skip } = paginationHelpers.calculatePagination(options);
+  const { searchTerm, paymentStatus, event, division } = params;
 
-//   const amount = getEventAmount(division);
+  const andConditions: Prisma.Event_RegistrationWhereInput[] = [];
 
-//   if (amount === 0) {
-//     throw new AppError(httpStatus.BAD_REQUEST, "Invalid Amount");
-//   }
+  if (searchTerm) {
+    andConditions.push({
+      OR: eventSearchableField.map((field) => ({
+        [field]: {
+          contains: searchTerm,
+          mode: "insensitive",
+        },
+      })),
+    });
+  }
 
-//   if (!paymentType) {
-//     throw new AppError(httpStatus.BAD_REQUEST, "Payment type is required");
-//   }
+  if (paymentStatus) {
+    andConditions.push({
+      paymentStatus,
+    });
+  }
 
-//   const pType = Number(paymentType);
+  if (event) {
+    andConditions.push({
+      eventName: event,
+    });
+  }
 
-//   await isEventAlreadyExists(division, player1Email, player2Email);
+  if (division) {
+    andConditions.push({
+      division,
+    });
+  }
 
-//   const teamId = await generateTeamId();
+  const whereCondition: Prisma.Event_RegistrationWhereInput = {
+    AND: andConditions,
+  };
 
-//   let result: any;
-
-//   if (pType === eventPaymentType.card) {
-//     paymentMethod = "CARD";
-
-//     result = await prisma.$transaction(
-//       async (tx) => {
-//         const event = await tx.event_Registration.create({
-//           data: {
-//             teamName,
-//             division,
-//             teamId,
-//             sessionId,
-//             player1Name: player1Name,
-//             player2Name: player2Name,
-//             player1Email: player1Email,
-//             player2Email: player2Email,
-//             player1Phone: player1Phone || null,
-//             player2Phone: player2Phone || null,
-//             paymentEmail: email,
-//             paymentStatus: PaymentStatus.PAID,
-//             registrationStatus: RegistrationStatus.COMPLETED,
-//           },
-//         });
-
-//         const payment = await tx.payment.create({
-//           data: {
-//             name,
-//             email,
-//             phone: phone || null,
-//             addressLine1: addressLine1 || null,
-//             addressLine2: addressLine2 || null,
-//             city: city || null,
-//             state: state || null,
-//             zip: zip || null,
-//             eventId: event.id,
-//             paymentStatus: PaymentStatus.PAID,
-//             amount,
-//             paymentMethod,
-//             memo,
-//           },
-//         });
-
-//         return { event, payment };
-//       },
-//       {
-//         maxWait: 5000,
-//         timeout: 10000,
-//         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-//       }
-//     );
-//   }
-
-//   // else if (pType === eventPaymentType.zelle) {
-//   //   paymentMethod = "ZELLE";
-
-//   //   result = await prisma.$transaction(async (tx) => {
-//   //     const event = await tx.event_Registration.create({
-//   //       data: {
-//   //         teamName,
-//   //         division,
-//   //         teamId,
-//   //         player1Name,
-//   //         player2Name,
-//   //         player1Email,
-//   //         player2Email,
-//   //         player1Phone,
-//   //         player2Phone,
-//   //         paymentEmail: email,
-//   //       },
-//   //     });
-
-//   //     const payment = await tx.payment.create({
-//   //       data: {
-//   //         name,
-//   //         email,
-//   //         eventId: event.id,
-//   //         amount,
-//   //         paymentMethod,
-//   //         memo,
-//   //       },
-//   //     });
-
-//   //     const address = `Address: N/A`;
-
-//   //     const today = new Date();
-//   //     const day = String(today.getDate()).padStart(2, "0"); // Ensure day is always two digits
-//   //     const month = String(today.getMonth() + 1).padStart(2, "0"); // Months are 0-based, so we add 1
-//   //     const year = today.getFullYear();
-
-//   //     const date = `${month}/${day}/${year}`;
-
-//   //     const pdf = await generateAndSavePdf(
-//   //       name,
-//   //       email,
-//   //       phone,
-//   //       division,
-//   //       address,
-//   //       teamName,
-//   //       amount.toString(),
-//   //       paymentMethod,
-//   //       teamId,
-//   //       date
-//   //     );
-
-//   //     // send mail to admin
-
-//   //     const paymentDetails = {
-//   //       name,
-//   //       email,
-//   //       amount: amount.toString(),
-//   //       date,
-//   //       teamName,
-//   //       teamId,
-//   //       status: "Pending",
-//   //       paymentMethod,
-//   //     };
-
-//   //     const html = paymentSuccessTemplateAdmin(paymentDetails);
-
-//   //     await sendEmail(
-//   //       config.default_email as string,
-//   //       "New Payment Request with Zelle",
-//   //       html,
-//   //       teamId
-//   //     );
-//   //     return { event, payment, receipt: pdf };
-//   //   },
-//   //   {
-//   //     maxWait: 5000,
-//   //     timeout: 10000,
-//   //     isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-//   //   }
-//   // );
-//   // }
-
-//   // else {
-//   //   throw new AppError(httpStatus.BAD_REQUEST, "Invalid payment type");
-//   // }
-
-//   const MAX_RETRIES = 3; // Max retries for testing
-//   const TIMEOUT = 40000; // Timeout for the transaction (10 seconds)
-//   const MAX_WAIT = 15000; // Max wait for transaction (10 seconds) Max wait for transaction (10 seconds)
-//   let retries = 0;
-
-//   async function createEventAndPayment() {
-//     while (retries < MAX_RETRIES) {
-//       try {
-//         if (pType === eventPaymentType.zelle) {
-//           paymentMethod = "ZELLE";
-
-//           result = await prisma.$transaction(
-//             async (tx) => {
-//               // Simulate a delay (e.g., 15 seconds) to trigger the timeout error
-//               // await new Promise((resolve) => setTimeout(resolve, 6000)); // 15 seconds delay to simulate a timeout
-
-//               const event = await tx.event_Registration.create({
-//                 data: {
-//                   teamName,
-//                   division,
-//                   teamId,
-//                   player1Name,
-//                   player2Name,
-//                   player1Email,
-//                   player2Email,
-//                   player1Phone,
-//                   player2Phone,
-//                   paymentEmail: email,
-//                 },
-//               });
-
-//               const payment = await tx.payment.create({
-//                 data: {
-//                   name,
-//                   email,
-//                   eventId: event.id,
-//                   amount,
-//                   paymentMethod,
-//                   memo,
-//                 },
-//               });
-
-//               const address = `Address: N/A`;
-
-//               const today = new Date();
-//               const day = String(today.getDate()).padStart(2, "0");
-//               const month = String(today.getMonth() + 1).padStart(2, "0");
-//               const year = today.getFullYear();
-
-//               const date = `${month}/${day}/${year}`;
-
-//               const pdf = await generateAndSavePdf(
-//                 name,
-//                 email,
-//                 phone,
-//                 division,
-//                 address,
-//                 teamName,
-//                 amount.toString(),
-//                 paymentMethod,
-//                 teamId,
-//                 date
-//               );
-
-//               // Send email to admin
-//               const paymentDetails = {
-//                 name,
-//                 email,
-//                 amount: amount.toString(),
-//                 date,
-//                 teamName,
-//                 teamId,
-//                 status: "Pending",
-//                 paymentMethod,
-//               };
-
-//               const html = paymentSuccessTemplateAdmin(paymentDetails);
-//               // await sendEmail(
-//               //   config.default_email as string,
-//               //   "New Payment Request with Zelle",
-//               //   html,
-//               //   teamId
-//               // );
-
-//               return { event, payment, receipt: pdf };
-//             },
-//             {
-//               maxWait: MAX_WAIT,
-//               timeout: TIMEOUT,
-//               isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-//             }
-//           );
-
-//           // If the transaction is successful, break the loop
-//           break;
-//         }
-//       } catch (error) {
-//         if (error.code === "P2028" && retries < MAX_RETRIES) {
-//           // Handle timeout (P2028) and retry
-//           console.log(
-//             `Transaction timed out. Retrying... (${retries + 1}/${MAX_RETRIES})`
-//           );
-//           retries++;
-//           continue;
-//         } else {
-//           // Handle other errors or after exceeding retry limit
-//           console.error("Transaction failed:", error);
-//           throw error;
-//         }
-//       }
-//     }
-
-//     if (retries === MAX_RETRIES) {
-//       console.error("Transaction failed after maximum retries");
-//       throw new AppError(
-//         httpStatus.BAD_REQUEST,
-//         "Transaction failed after maximum retries"
-//       );
-//     }
-
-//     return result;
-//   }
-
-//   // Call the function to start the process
-//   createEventAndPayment()
-//     .then((result) => {
-//       console.log("Transaction completed successfully:", result);
-//     })
-//     .catch((error) => {
-//       console.error("Transaction failed:", error);
-//     });
-
-//   return result;
-// };
-
-const getAllEventsFromDb = async () => {
   const result = await prisma.event_Registration.findMany({
+    where: whereCondition,
     include: {
       payment: true,
     },
+    skip,
+    take: limit,
+    orderBy: {
+      createdAt: options.sortOrder || "desc",
+    },
   });
 
-  return result;
+  const totalData = await prisma.event_Registration.count({
+    where: whereCondition,
+  });
+
+  return {
+    meta: {
+      page,
+      limit,
+      total: totalData,
+    },
+    data: result,
+  };
 };
 
 const updateEventIntoDb = async (id: string, payload: any) => {
+  if (Object.keys(payload).length === 0) {
+    throw new AppError(httpStatus.NOT_ACCEPTABLE, "Invalid Payload");
+  }
+
   const existingEvent = await isEventExists(id);
 
   await isEventOverlapped(payload, id);
 
   let amount = Number(existingEvent.payment?.amount || 0);
 
-  if (payload?.division !== existingEvent.division) {
+  if (payload?.division && payload.division !== existingEvent.division) {
     amount = getEventAmount(payload.division);
   }
 
@@ -383,7 +145,6 @@ const updateEventIntoDb = async (id: string, payload: any) => {
       },
       data: {
         amount: amount.toString(),
-        paymentStatus: payload.paymentStatus,
       },
     });
 
@@ -394,51 +155,22 @@ const updateEventIntoDb = async (id: string, payload: any) => {
 };
 
 const updatePaymentIntoDb = async (id: string, payload: any) => {
-  const {
-    name,
-    email,
-    phone,
-    address,
-    city,
-    state,
-    zip,
-    description,
-    paymentStatus,
-  } = payload;
-
-  const { payment } = await isEventExists(id);
-
-  const result = await prisma.$transaction(async (tx) => {
-    const updatePayment = await tx.payment.update({
-      where: {
-        eventId: id,
-      },
-      data: {
-        name: name || payment!.name,
-        email: email || payment!.email,
-        phone: phone || payment!.phone,
-        addressLine1: address || payment!.addressLine1,
-        addressLine2: address || payment!.addressLine2,
-        city: city || payment!.city,
-        state: state || payment!.state,
-        zip: zip || payment!.zip,
-        memo: description || payment!.memo,
-        paymentStatus: paymentStatus || payment!.paymentStatus,
-      },
-    });
-
-    const event = await tx.event_Registration.update({
-      where: {
-        id,
-      },
-      data: {
-        paymentStatus,
-      },
-    });
-
-    return { event, payment: updatePayment };
+  const existingPayment = await prisma.payment.findUnique({
+    where: {
+      eventId: id,
+    },
   });
 
+  if (!existingPayment) {
+    throw new AppError(httpStatus.NOT_FOUND, "Payment not found!");
+  }
+
+  const result = await prisma.payment.update({
+    where: {
+      id,
+    },
+    data: payload,
+  });
   return result;
 };
 
@@ -478,9 +210,15 @@ const createCheckoutSession = async (payload: any) => {
       payload.player1Name
     }&player2Name=${payload.player2Name}&player1Email=${
       payload.player1Email
-    }&player2Email=${payload.player2Email}&player1Phone=${
+    }&player2Email=${payload.player2Email}&eventName=${
+      payload.eventName
+    }&player1Phone=${
       payload.player1Phone ? payload.player1Phone : null
-    }&player2Phone=${payload.player2Phone ? payload.player2Phone : null}&memo=${
+    }&player2Phone=${
+      payload.player2Phone ? payload.player2Phone : null
+    }&player1Image=${
+      payload.player1Image ? payload.player1Image : null
+    }&player2Image=${payload.player2Image ? payload.player2Image : null}&memo=${
       payload.memo ? payload.memo : null
     }`,
   });
@@ -490,8 +228,24 @@ const createCheckoutSession = async (payload: any) => {
 
 const sessionStatus = async (queryData: any) => {
   const session = await stripe.checkout.sessions.retrieve(queryData.sessionId);
+  // const session = {
+  //   payment_status: "paid",
+  //   status: "complete",
+  //   customer_details: {
+  //     name: "Jubayer Ahmed",
+  //     email: "jubayerahmedshamim44@gmail.com",
+  //     address: {
+  //       line1: "123 Main St",
+  //       line2: "Apt 4B",
+  //       city: "Anytown",
+  //       state: "CA",
+  //       postal_code: "12345",
+  //     },
+  //     phone: "555-555-5555",
+  //   },
+  // };
 
-  const isSessionExists = await prisma.event_Registration.findFirst({
+  const isSessionExists = await prisma.event_Registration.findUnique({
     where: {
       sessionId: queryData.sessionId,
     },
@@ -534,6 +288,8 @@ const createEventIntoDb = async (payload: any) => {
     sessionId,
     player1Phone,
     player2Phone,
+    player1Image,
+    player2Image,
     name,
     email,
     phone,
@@ -544,6 +300,7 @@ const createEventIntoDb = async (payload: any) => {
     zip,
     memo,
     paymentType,
+    eventName,
   } = payload;
 
   const player1Email = payload.player1Email || payload.player1email;
@@ -628,11 +385,14 @@ const createEventIntoDb = async (payload: any) => {
             player2Name,
             player1Email,
             player2Email,
-            player1Phone: player1Phone || null,
-            player2Phone: player2Phone || null,
+            player1Phone,
+            player2Phone,
+            player1Image: player1Image || null,
+            player2Image: player2Image || null,
             paymentEmail: email,
             paymentStatus: PaymentStatus.PAID,
             registrationStatus: RegistrationStatus.COMPLETED,
+            eventName,
           },
         });
 
@@ -650,11 +410,70 @@ const createEventIntoDb = async (payload: any) => {
             paymentStatus: PaymentStatus.PAID,
             amount,
             paymentMethod,
+            sendConfirmationMail: true,
             memo,
           },
         });
 
-        return { event, payment };
+        const address = `Address: ${addressLine1}, ${city}, ${state}, ${zip}`;
+
+        const pdf = await generateAndSavePdf(
+          name,
+          email,
+          phone,
+          division,
+          address,
+          eventName,
+          amount.toString(),
+          paymentMethod,
+          teamId,
+          date
+        );
+
+        // Send email to admin
+        const paymentDetailsForAdmin = {
+          name,
+          email,
+          amount: amount.toString(),
+          date,
+          teamName,
+          teamId,
+          status: "Success",
+          paymentMethod,
+          eventName,
+        };
+
+        const paymentDetailsForUser = {
+          name,
+          email,
+          amount: amount.toString(),
+          paymentMethod,
+          date,
+          teamName,
+          teamId,
+          eventName,
+        };
+
+        const adminHtml = paymentSuccessTemplateAdmin(paymentDetailsForAdmin);
+        const userHtml = paymentSuccessTemplate(paymentDetailsForUser);
+
+        // Asynchronously trigger email sending without waiting for them
+        Promise.all([
+          sendEmail(
+            config.default_email as string,
+            "New Payment with Card",
+            adminHtml,
+            teamId
+          ),
+          sendEmail(
+            email as string,
+            "Payment Success with Dulles United Association",
+            userHtml,
+            teamId
+          ),
+        ]);
+
+        return { event, payment, receipt: pdf };
       },
       {
         maxWait: MAX_WAIT,
@@ -681,7 +500,10 @@ const createEventIntoDb = async (payload: any) => {
             player2Email,
             player1Phone,
             player2Phone,
+            player1Image: player1Image || null,
+            player2Image: player2Image || null,
             paymentEmail: email,
+            eventName,
           },
         });
 
@@ -689,33 +511,13 @@ const createEventIntoDb = async (payload: any) => {
           data: {
             name,
             email,
+            phone,
             eventId: event.id,
             amount,
             paymentMethod,
             memo,
           },
         });
-
-        const address = `Address: N/A`;
-
-        const today = new Date();
-        const day = String(today.getDate()).padStart(2, "0");
-        const month = String(today.getMonth() + 1).padStart(2, "0");
-        const year = today.getFullYear();
-        const date = `${month}/${day}/${year}`;
-
-        const pdf = await generateAndSavePdf(
-          name,
-          email,
-          phone,
-          division,
-          address,
-          teamName,
-          amount.toString(),
-          paymentMethod,
-          teamId,
-          date
-        );
 
         // Send email to admin
         const paymentDetails = {
@@ -727,18 +529,21 @@ const createEventIntoDb = async (payload: any) => {
           teamId,
           status: "Pending",
           paymentMethod,
+          eventName,
         };
 
         const html = paymentSuccessTemplateAdmin(paymentDetails);
 
-        await sendEmail(
-          config.default_email as string,
-          "New Payment Request with Zelle",
-          html,
-          teamId
-        );
+        // Trigger email sending asynchronously
+        Promise.all([
+          sendEmailWithAttach(
+            config.default_email as string,
+            html,
+            "New Payment Request with Zelle"
+          ),
+        ]);
 
-        return { event, payment, receipt: pdf };
+        return { event, payment };
       },
       {
         maxWait: MAX_WAIT,
@@ -754,6 +559,133 @@ const createEventIntoDb = async (payload: any) => {
   );
 };
 
+const updateZellePaymentStatus = async (status: PaymentStatus, id: string) => {
+  const existing = await isEventExists(id);
+
+  const eventPayment = existing.payment!;
+
+  if (existing && eventPayment?.paymentMethod === PaymentMethod.CARD) {
+    throw new AppError(
+      httpStatus.UNAUTHORIZED,
+      "You Can't Update Card Payment Status"
+    );
+  }
+
+  if (eventPayment.paymentStatus === status) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      `Payment Status Already ${eventPayment.paymentStatus}`
+    );
+  }
+
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const event = await tx.event_Registration.update({
+        where: {
+          id,
+        },
+        data: {
+          paymentStatus: status,
+        },
+      });
+      const payment = await tx.payment.update({
+        where: {
+          id: eventPayment!.id,
+        },
+        data: {
+          paymentStatus: status,
+          sendConfirmationMail: true,
+        },
+      });
+      return { event, payment };
+    },
+    {
+      maxWait: MAX_WAIT,
+      timeout: TIMEOUT,
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    }
+  );
+
+  if (
+    eventPayment.sendConfirmationMail === false &&
+    eventPayment.paymentStatus === "UNPAID"
+  ) {
+    const address = `Address: N/A`;
+
+    await generateAndSavePdf(
+      eventPayment.name,
+      eventPayment.email,
+      eventPayment.phone,
+      existing.division,
+      address,
+      existing.eventName,
+      eventPayment.amount!.toString(),
+      eventPayment.paymentMethod,
+      existing.teamId,
+      date
+    );
+
+    // Send email to admin
+    const paymentDetailsForAdmin = {
+      name: eventPayment.name,
+      email: eventPayment.email,
+      amount: eventPayment.amount!.toString(),
+      date,
+      teamName: existing.teamName,
+      teamId: existing.teamId,
+      status: "Success",
+      paymentMethod: eventPayment.paymentMethod,
+      eventName: existing.eventName,
+    };
+
+    const paymentDetailsForUser = {
+      name: eventPayment.name,
+      email: eventPayment.email,
+      amount: eventPayment.amount!.toString(),
+      paymentMethod: eventPayment.paymentMethod,
+      date,
+      teamName: existing.teamName,
+      teamId: existing.teamId,
+      eventName: existing.eventName,
+    };
+
+    const adminHtml = paymentSuccessTemplateAdmin(paymentDetailsForAdmin);
+    const userHtml = paymentSuccessTemplate(paymentDetailsForUser);
+
+    Promise.all([
+      sendEmail(
+        config.default_email as string,
+        "Event Registration - Dulles United Association",
+        adminHtml,
+        existing.teamId
+      ),
+      sendEmail(
+        eventPayment.email as string,
+        "Event Registration - Dulles United Association",
+        userHtml,
+        existing.teamId
+      ),
+    ]).catch((error) => {
+      console.error("Email sending failed:", error);
+    });
+  }
+
+  return result;
+};
+
+const deleteEventFromDb = async (id: string, user: JwtPayload) => {
+  await isEventExists(id);
+  await isUserExists(user.id);
+
+  const result = await prisma.event_Registration.findUnique({
+    where: {
+      id,
+    },
+  });
+
+  return result;
+};
+
 export const EventRegistrationServices = {
   createEventIntoDb,
   getAllEventsFromDb,
@@ -761,4 +693,6 @@ export const EventRegistrationServices = {
   updatePaymentIntoDb,
   createCheckoutSession,
   sessionStatus,
+  updateZellePaymentStatus,
+  deleteEventFromDb,
 };

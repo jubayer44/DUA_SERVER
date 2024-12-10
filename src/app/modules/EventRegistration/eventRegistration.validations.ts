@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const createValidation = z.object({
+const createValidationWithZelle = z.object({
   body: z.object({
     teamName: z.string({
       required_error: "Team Name is required",
@@ -26,16 +26,14 @@ const createValidation = z.object({
       required_error: "Player 2 Email is required",
       invalid_type_error: "Player 2 Email must be a string",
     }),
-    player1Phone: z
-      .string({
-        invalid_type_error: "Player 1 Phone must be a string",
-      })
-      .optional(),
-    player2Phone: z
-      .string({
-        invalid_type_error: "Player 2 Phone must be a string",
-      })
-      .optional(),
+    player1Phone: z.string({
+      required_error: "Player 1 Phone is required",
+      invalid_type_error: "Player 1 Phone must be a string",
+    }),
+    player2Phone: z.string({
+      required_error: "Player 2 Phone is required",
+      invalid_type_error: "Player 2 Phone must be a string",
+    }),
     name: z.string({
       required_error: "Name is required",
       invalid_type_error: "Name must be a string",
@@ -92,6 +90,16 @@ const createValidationWithCard = z.object({
     player2Phone: z.string({
       invalid_type_error: "Player 2 Phone must be a string",
     }),
+    player1Image: z
+      .string({
+        invalid_type_error: "Player 1 Image must be a string",
+      })
+      .optional(),
+    player2Image: z
+      .string({
+        invalid_type_error: "Player 2 Image must be a string",
+      })
+      .optional(),
   }),
 });
 
@@ -137,20 +145,14 @@ const eventUpdateValidation = z.object({
         invalid_type_error: "Player 2 Phone must be a string",
       })
       .optional(),
-    memo: z
+    player1Image: z
       .string({
-        invalid_type_error: "Memo must be a string",
+        invalid_type_error: "Player 1 Image must be a string",
       })
       .optional(),
-    paymentStatus: z
-      .enum(["PAID", "UNPAID"], {
-        invalid_type_error: "Payment Status must be PAID or UNPAID",
-      })
-      .optional(),
-    registrationStatus: z
-      .enum(["COMPLETED", "PENDING", "CANCELLED"], {
-        invalid_type_error:
-          "Registration Status must be COMPLETED or PENDING or CANCELLED",
+    player2Image: z
+      .string({
+        invalid_type_error: "Player 2 Image must be a string",
       })
       .optional(),
   }),
@@ -173,9 +175,14 @@ const paymentUpdateValidation = z.object({
         invalid_type_error: "Phone must be a string",
       })
       .optional(),
-    address: z
+    addressLine1: z
       .string({
-        invalid_type_error: "Address must be a string",
+        invalid_type_error: "Address Line1 must be a string",
+      })
+      .optional(),
+    addressLine2: z
+      .string({
+        invalid_type_error: "Address Line2 must be a string",
       })
       .optional(),
     city: z
@@ -193,22 +200,27 @@ const paymentUpdateValidation = z.object({
         invalid_type_error: "Zip must be a string",
       })
       .optional(),
-    description: z
+    memo: z
       .string({
         invalid_type_error: "Description must be a string",
-      })
-      .optional(),
-    paymentStatus: z
-      .string({
-        invalid_type_error: "paymentStatus must be a string",
       })
       .optional(),
   }),
 });
 
+const updateZelleStatus = z.object({
+  body: z.object({
+    paymentStatus: z.enum(["PAID", "UNPAID"], {
+      required_error: "Payment Status is required",
+      invalid_type_error: "Payment Status must be PAID or UNPAID",
+    }),
+  }),
+});
+
 export const EventRegistrationValidationSchemas = {
-  createValidation,
+  createValidationWithZelle,
   createValidationWithCard,
   eventUpdateValidation,
   paymentUpdateValidation,
+  updateZelleStatus,
 };

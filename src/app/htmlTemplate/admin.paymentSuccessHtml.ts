@@ -7,6 +7,7 @@ export const paymentSuccessTemplateAdmin = (paymentDetails: {
   teamId: string;
   status: string;
   paymentMethod: string;
+  eventName: string;
 }) => {
   const year = new Date().getFullYear();
 
@@ -103,10 +104,16 @@ export const paymentSuccessTemplateAdmin = (paymentDetails: {
                 color: #3498db;
                 text-decoration: none;
             }
-                table {
-            width: 100%;
+            .table-container {
+            max-height: 200px; 
+            overflow: auto; 
             border: 1px solid #e2e8f0;
-            margin-top: 1rem;
+            border-radius: 8px;
+            background-color: #f7fafc;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
         }
 
         th, td {
@@ -156,20 +163,24 @@ export const paymentSuccessTemplateAdmin = (paymentDetails: {
             
         <div class="payment-details">
             <h3 >Team Information</h3>
-            <table class="min-w-full table-auto border-collapse">
-                <thead>
-                    <tr>
-                        <th>Team Name</th>
-                        <th>Team ID</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>${paymentDetails.teamName}</td>
-                        <td>${paymentDetails.teamId}</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Team Name</th>
+                            <th>Team ID</th>
+                            <th>Event</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>${paymentDetails.teamName}</td>
+                            <td>${paymentDetails.teamId}</td>
+                            <td>${paymentDetails.eventName}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
             <div class="payment-details">

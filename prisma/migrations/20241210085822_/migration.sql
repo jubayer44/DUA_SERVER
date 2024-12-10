@@ -59,7 +59,10 @@ CREATE TABLE "event_registrations" (
     "player2Email" TEXT NOT NULL,
     "player1Phone" TEXT,
     "player2Phone" TEXT,
+    "player1Image" TEXT,
+    "player2Image" TEXT,
     "paymentEmail" TEXT NOT NULL,
+    "eventName" TEXT NOT NULL,
     "paymentStatus" "PaymentStatus" NOT NULL DEFAULT 'UNPAID',
     "registrationStatus" "RegistrationStatus" NOT NULL DEFAULT 'PENDING',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -83,6 +86,7 @@ CREATE TABLE "Payment" (
     "memo" TEXT,
     "paymentMethod" "PaymentMethod" NOT NULL,
     "paymentStatus" "PaymentStatus" NOT NULL DEFAULT 'UNPAID',
+    "sendConfirmationMail" BOOLEAN NOT NULL DEFAULT false,
     "eventId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -92,6 +96,9 @@ CREATE TABLE "Payment" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "event_registrations_sessionId_key" ON "event_registrations"("sessionId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Payment_eventId_key" ON "Payment"("eventId");
